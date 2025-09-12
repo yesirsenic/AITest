@@ -47,9 +47,7 @@ pipeline {
                                 ]
                             },
                             "상태": {
-                                "rich_text": [
-                                    { "text": { "content": "SUCCESS: Jenkins build" } }
-                                ]
+                                "select": { "name": "완료" }
                             }
                         }
                     }"""

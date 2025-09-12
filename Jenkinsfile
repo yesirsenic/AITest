@@ -47,7 +47,7 @@ pipeline {
                         ]
                     },
                     "상태": {
-                        "select": { "name": "완료" }
+                        "status": { "name": "완료" }
                     }
                 }
             }"""

@@ -4,7 +4,9 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/yesirsenic/AITest.git'
+                git branch: 'main',
+                    url: 'https://github.com/yesirsenic/AITest.git',
+                    credentialsId: 'AITestGitHub'
             }
         }
         stage('Build') {
@@ -20,6 +22,11 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo '배포 단계 실행 중...'
+            }
+        }
+        stage('Update Jira') {
+            steps {
+                jiraAddComment site: 'AITestJira', idOrKey: 'SCRUM-1', comment: '✅ Jenkins 빌드 성공!'
             }
         }
     }

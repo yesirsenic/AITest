@@ -36,7 +36,7 @@ pipeline {
 
         stage('Update Notion') {
             steps {
-                withCredentials([string(credentialsId: 'NotionToken', variable: 'NOTION_TOKEN')]) {
+                withCredentials([string(credentialsId: 'NotionAPIToken', variable: 'NOTION_TOKEN')]) {
                     // JSON 파일 생성
                     writeFile file: 'notion.json', text: """{
                         "parent": { "database_id": "26ccf41cca108003b25bd851f63aac87" },

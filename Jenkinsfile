@@ -43,14 +43,14 @@ pipeline {
             steps {
                 bat """
                 powershell -Command ^
-                  $json = '{
+                  \$json = '{
                     "parent": { "database_id": "26ccf41cca10809fbc2de77fc48aa2b5" },
                     "properties": {
                       "BuildName": { "title": [ { "text": { "content": "AITest Build #${BUILD_NUMBER}" } } ] },
                       "Status": { "rich_text": [ { "text": { "content": "SUCCESS: Jenkins build" } } ] }
                     }
                   }'; ^
-                  $json | Out-File -FilePath notion.json -Encoding utf8; ^
+                  \$json | Out-File -FilePath notion.json -Encoding utf8; ^
                   curl -X POST "https://api.notion.com/v1/pages" ^
                     -H "Authorization: Bearer %NOTION_TOKEN%" ^
                     -H "Content-Type: application/json" ^

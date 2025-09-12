@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // Jenkins Credentials에 등록한 Notion Secret Token
         NOTION_TOKEN = credentials('NotionAPIToken')
     }
 
@@ -41,16 +40,24 @@ pipeline {
 
         stage('Update Notion') {
             steps {
-                // 1) JSON 파일 생성 (UTF-8로 저장됨)
-                writeFile file: 'notion.json', text: """{
+                // JSON 파일 생성
+                writeFile file: 'notion.json', text: """
+{
   "parent": { "database_id": "26ccf41cca10809fbc2de77fc48aa2b5" },
   "properties": {
-    "BuildName": { "title": [ { "text": { "content": "AITest Build #${BUILD_NUMBER}" } } ] },
-    "Status": { "rich_text": [ { "text": { "content": "SUCCESS: Jenkins build" } } ] }
+    "BuildName": {
+      "title": [
+        { "text": { "content": "AITest Build #${BUILD_NUMBER}" } }
+      ]
+    },
+    "상태": {
+      "select": { "name": "성공" }
+    }
   }
-}"""
+}
+"""
 
-                // 2) curl로 파일 전송
+                // curl 호출
                 bat """
                 curl -X POST "https://api.notion.com/v1/pages" ^
                     -H "Authorization: Bearer %NOTION_TOKEN%" ^

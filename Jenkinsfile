@@ -42,11 +42,13 @@ pipeline {
         stage('Update Notion') {
             steps {
                 bat """
+                echo { "parent": { "database_id": "26ccf41cca10809fbc2de77fc48aa2b5" }, "properties": { "BuildName": { "title": [ { "text": { "content": "AITest Build #${BUILD_NUMBER}" } } ] }, "Status": { "rich_text": [ { "text": { "content": "SUCCESS: Jenkins build" } } ] } } > notion.json
+
                 curl -X POST "https://api.notion.com/v1/pages" ^
                     -H "Authorization: Bearer %NOTION_TOKEN%" ^
                     -H "Content-Type: application/json" ^
                     -H "Notion-Version: 2022-06-28" ^
-                    -d "{ \\"parent\\":{\\"database_id\\":\\"26ccf41cca10809fbc2de77fc48aa2b5\\"}, \\"properties\\":{\\"BuildName\\":{\\"title\\":[{\\"text\\":{\\"content\\":\\"AITest Build #${BUILD_NUMBER}\\"}}]}, \\"Status\\":{\\"rich_text\\":[{\\"text\\":{\\"content\\":\\"SUCCESS: Jenkins build\\"}}]}}"
+                    -d @notion.json
                 """
             }
         }

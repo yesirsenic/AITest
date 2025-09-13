@@ -3,6 +3,8 @@ using UnityEngine.Networking;
 using System.Text;
 using System.Collections;
 using UnityEngine.UI;
+using System.Collections.Generic;
+using System.IO;
 
 //Ollama 서버(로컬 http://localhost:11434/api/generate)에 보낼 요청(request) 데이터 구조.
 [System.Serializable]
@@ -30,8 +32,10 @@ public class AIManager : MonoBehaviour
     public InputField inputField;
     public GameObject chatMessagePrefab;
     public Transform chatContent;
+    public ScrollRect scrollRect;
 
-    public PromptLoader promptLoader; 
+    public PromptLoader promptLoader;
+    public MemoryManager memoryManager;
     private string currentSystemPrompt;
     private string currentNpcId;
 
@@ -55,12 +59,43 @@ public class AIManager : MonoBehaviour
     {
         GameObject newMsg = Instantiate(chatMessagePrefab, chatContent);
         newMsg.GetComponent<ChatMessage>().SetMessage(text);
+
+        StartCoroutine(ScrollToBottomNextFrame());
     }
 
-    //대화 시작 전 캐릭터 성격/설정 불러오기.
+        //메시지를 추가한 직후 화면을 자동으로 맨 아래로 당기는 기능
+    IEnumerator ScrollToBottomNextFrame()
+    {
+        Canvas.ForceUpdateCanvases();
+        
+        yield return null;
+        LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)chatContent);
+        scrollRect.verticalNormalizedPosition = 0f; 
+    }
+
+    // 대화 시작 전 캐릭터 성격/설정 불러오기.
     public void StartConversation()
     {
-        currentSystemPrompt = promptLoader.GetPrompt(currentNpcId);
+        
+        string basePrompt = promptLoader.GetPrompt(currentNpcId);
+
+        
+        List<MemoryItem> memories = memoryManager.GetMemories(currentNpcId);
+
+        string memoryText = "";
+        if (memories.Count > 0)
+        {
+            memoryText = "이 NPC가 기억하는 과거 대화:\n";
+            foreach (var m in memories)
+            {
+                
+                memoryText += $"- ({m.importance}) {m.text}\n";
+            }
+        }
+
+        
+        currentSystemPrompt = basePrompt + "\n\n" + memoryText;
+
         Debug.Log("대화 시작! NPC 프롬프트: " + currentSystemPrompt);
     }
 
@@ -98,6 +133,7 @@ public class AIManager : MonoBehaviour
                 string responseJson = www.downloadHandler.text;
                 OllamaResponse parsed = JsonUtility.FromJson<OllamaResponse>(responseJson);
                 CreateMessage("AI: " + parsed.response);
+                StartCoroutine(EvaluateImportance(userInput, parsed.response));
             }
             else
             {
@@ -105,8 +141,65 @@ public class AIManager : MonoBehaviour
             }
         }
     }
-    
 
-    
+    IEnumerator EvaluateImportance(string userInput, string aiResponse)
+    {
+              //AI에게 평가 규칙을 설명하는 프롬프트
+        string evalPrompt =
+         "다음 대화를 보고 중요도를 1~5로 평가하라.\n" +
+         "1 = 전혀 중요하지 않음\n" +
+         "5 = 반드시 기억해야 하는 사실\n\n" +
+         "대화:\n사용자: " + userInput + "\nNPC: " + aiResponse + "\n\n" +
+         "중요도가 3 이상이면 반드시 아래 형식으로 출력:\n" +
+         "LEVEL: <숫자>\nSAVE: <요약된 사실>\n\n" +
+         "중요도가 3 미만이면 'IGNORE'라고 출력해.";
+
+        OllamaRequest evalRequest = new OllamaRequest()
+        {
+            model = "llama3",
+            prompt = evalPrompt,
+            stream = false
+        };
+
+        string json = JsonUtility.ToJson(evalRequest);
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+
+        using (UnityWebRequest www = new UnityWebRequest(apiUrl, "POST"))
+        {
+            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "application/json");
+
+            yield return www.SendWebRequest();
+
+                    //AI가 스스로 대화 내용을 보고 "이건 중요한 기억이야" 라고 판단 → 그걸 메모리DB에 저장하는 구조
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                string responseJson = www.downloadHandler.text;
+                OllamaResponse parsed = JsonUtility.FromJson<OllamaResponse>(responseJson);
+
+                string result = parsed.response.Trim();
+                Debug.Log("중요도 평가 결과: " + result);
+
+                if (result.StartsWith("LEVEL:"))
+                {
+                    
+                    string[] lines = result.Split('\n');
+                    int level = int.Parse(lines[0].Replace("LEVEL:", "").Trim());
+                    string fact = lines[1].Replace("SAVE:", "").Trim();
+
+                    FindFirstObjectByType<MemoryManager>().AddMemory(currentNpcId, fact, level);
+                    Debug.Log($"메모리에 저장됨 (중요도 {level}): {fact}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("중요도 평가 실패: " + www.error);
+            }
+        }
+    }
+
+
+
 }
 

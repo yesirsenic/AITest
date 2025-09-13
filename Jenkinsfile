@@ -2,14 +2,6 @@ pipeline {
     agent any
 
     stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'main',
-                    url: 'https://github.com/yesirsenic/AITest.git',
-                    credentialsId: 'AITestGitHub'
-            }
-        }
-
         stage('Build') {
             steps {
                 echo 'Unity 프로젝트 빌드 단계 실행 중...'
@@ -35,33 +27,33 @@ pipeline {
         }
 
         stage('Update Notion') {
-    steps {
-        withCredentials([string(credentialsId: 'NotionAPIToken', variable: 'NOTION_TOKEN')]) {
-            // JSON 파일 생성
-            writeFile file: 'notion.json', text: """{
-                "parent": { "database_id": "26ccf41cca1080b499bec1eeb2298f49" },
-                "properties": {
-                    "BuildName": {
-                        "title": [
-                            { "text": { "content": "AITest Build #${BUILD_NUMBER}" } }
-                        ]
-                    },
-                    "상태": {
-                        "status": { "name": "완료" }
-                    }
-                }
-            }"""
+            steps {
+                withCredentials([string(credentialsId: 'NotionAPIToken', variable: 'NOTION_TOKEN')]) {
+                    // JSON 파일 생성
+                    writeFile file: 'notion.json', text: """{
+                        "parent": { "database_id": "26ccf41cca1080b499bec1eeb2298f49" },
+                        "properties": {
+                            "BuildName": {
+                                "title": [
+                                    { "text": { "content": "AITest Build #${BUILD_NUMBER}" } }
+                                ]
+                            },
+                            "상태": {
+                                "status": { "name": "완료" }
+                            }
+                        }
+                    }"""
 
-            // Notion API 호출
-            bat """
-                curl -X POST "https://api.notion.com/v1/pages" ^
-                -H "Authorization: Bearer %NOTION_TOKEN%" ^
-                -H "Content-Type: application/json" ^
-                -H "Notion-Version: 2022-06-28" ^
-                -d @notion.json
-            """
+                    // Notion API 호출
+                    bat """
+                        curl -X POST "https://api.notion.com/v1/pages" ^
+                        -H "Authorization: Bearer %NOTION_TOKEN%" ^
+                        -H "Content-Type: application/json" ^
+                        -H "Notion-Version: 2022-06-28" ^
+                        -d @notion.json
+                    """
+                }
+            }
         }
-    }
-}
     }
 }

@@ -1,6 +1,6 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
-//JSON¿¡ µé¾îÀÖ´Â NPC µ¥ÀÌÅÍ¸¦ ´ã´Â Å¬·¡½º
+//JSONì— ë“¤ì–´ìˆëŠ” NPC ë°ì´í„°ë¥¼ ë‹´ëŠ” í´ë˜ìŠ¤
 [System.Serializable]
 public class NPCPrompt
 {
@@ -21,17 +21,24 @@ public class PromptLoader : MonoBehaviour
 
     private NPCPromptList npcPromptList;
 
-    void Start()
+    void Awake()
     {
-        npcPromptList = JsonUtility.FromJson<NPCPromptList>(jsonFile.text);
-
-        foreach (var npc in npcPromptList.prompts)
+        if (jsonFile != null)
         {
-            Debug.Log($"NPC: {npc.name}, Prompt: {npc.prompt}");
+            npcPromptList = JsonUtility.FromJson<NPCPromptList>(jsonFile.text);
+
+            foreach (var npc in npcPromptList.prompts)
+            {
+                Debug.Log($"NPC: {npc.name}, Prompt: {npc.prompt}");
+            }
+        }
+        else
+        {
+            Debug.LogError("âš  jsonFileì´ Inspectorì— ì—°ê²°ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤!");
         }
     }
 
-    //ÀÔ·Â¹ŞÀº id¿Í ÀÏÄ¡ÇÏ´Â NPC¸¦ Ã£´Â ¸Å¼­µå
+    //ì…ë ¥ë°›ì€ idì™€ ì¼ì¹˜í•˜ëŠ” NPCë¥¼ ì°¾ëŠ” ë§¤ì„œë“œ
     public string GetPrompt(string id)
     {
         foreach (var npc in npcPromptList.prompts)

@@ -38,8 +38,14 @@ public class AIManager : MonoBehaviour
     public MemoryManager memoryManager;
     private string currentSystemPrompt;
     private string currentNpcId;
+    private string lastAIResponse = "";
 
     string apiUrl = "http://localhost:11434/api/generate";
+
+    void Start()
+    {
+        StartAIDialogue();
+    }
 
     public void OnSendButton()
     {
@@ -63,7 +69,7 @@ public class AIManager : MonoBehaviour
         StartCoroutine(ScrollToBottomNextFrame());
     }
 
-        //메시지를 추가한 직후 화면을 자동으로 맨 아래로 당기는 기능
+    //메시지를 추가한 직후 화면을 자동으로 맨 아래로 당기는 기능
     IEnumerator ScrollToBottomNextFrame()
     {
         Canvas.ForceUpdateCanvases();
@@ -105,6 +111,31 @@ public class AIManager : MonoBehaviour
         currentNpcId = npcId;
     }
 
+    //ai 끼리의 대화 코루틴 시작
+    public void StartAIDialogue()
+    {
+        StartCoroutine(AIDialogueLoop());
+    }
+
+    IEnumerator AIDialogueLoop()
+    {
+        string lastMessage = "안녕하세요, 오늘은 날씨가 좋네요."; // 대화 시작 문장
+        string currentNpc = "npc_girl"; // 첫 발화자
+
+        while (true) 
+        {
+            yield return StartCoroutine(SendMessageToOllamaAsNPC(currentNpc, lastMessage));
+
+            // 직전 응답을 다음 입력으로 넘기기
+            lastMessage = lastAIResponse;
+
+            // 말하는 NPC 교체
+            currentNpc = (currentNpc == "npc_girl") ? "npc_blacksmith" : "npc_girl";
+
+            yield return new WaitForSeconds(3f); // 텀 두고 대화
+        }
+    }
+
     //Ollama 서버에 메시지를 보내고 응답을 받는 실제 통신 부분.
     IEnumerator SendMessageToOllama(string userInput)
     {
@@ -142,14 +173,59 @@ public class AIManager : MonoBehaviour
         }
     }
 
-    IEnumerator EvaluateImportance(string userInput, string aiResponse)
+    // Ollama 서버와 통신하여 특정 NPC가 상대방의 발화(input)에 대한 응답을 생성하고,
+    // 그 결과를 UI와 메모리에 기록하는 함수 (NPC ↔ NPC 대화용).
+    IEnumerator SendMessageToOllamaAsNPC(string npcId, string input)
+    {      
+        
+      
+        string systemPrompt = promptLoader.GetPrompt(npcId);
+        string userPrompt = "상대방: " + input + "\n" + "너의 대답:";
+
+        OllamaRequest request = new OllamaRequest()
+        {
+            model = "llama3",
+            prompt = systemPrompt + "\n\n" + userPrompt,
+            stream = false
+        };
+
+        string json = JsonUtility.ToJson(request);
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+
+        using (UnityWebRequest www = new UnityWebRequest(apiUrl, "POST"))
+        {
+            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "application/json");
+
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                string responseJson = www.downloadHandler.text;
+                OllamaResponse parsed = JsonUtility.FromJson<OllamaResponse>(responseJson);
+
+                lastAIResponse = parsed.response.Trim();
+                CreateMessage($"{npcId}: {lastAIResponse}");
+
+                // 🔹 AI ↔ AI 대화도 중요도 평가 및 저장
+                StartCoroutine(EvaluateImportance("상대방: " + input, lastAIResponse, npcId));
+            }
+            else
+            {
+                CreateMessage($"{npcId} ⚠ 오류: {www.error}");
+            }
+        }
+    }
+
+    IEnumerator EvaluateImportance(string userInput, string aiResponse , string speakerNpcId = null)
     {
-              //AI에게 평가 규칙을 설명하는 프롬프트
+        //AI에게 평가 규칙을 설명하는 프롬프트
         string evalPrompt =
          "다음 대화를 보고 중요도를 1~5로 평가하라.\n" +
          "1 = 전혀 중요하지 않음\n" +
          "5 = 반드시 기억해야 하는 사실\n\n" +
-         "대화:\n사용자: " + userInput + "\nNPC: " + aiResponse + "\n\n" +
+         "대화:\n" + userInput + "\n응답: " + aiResponse + "\n\n" +
          "중요도가 3 이상이면 반드시 아래 형식으로 출력:\n" +
          "LEVEL: <숫자>\nSAVE: <요약된 사실>\n\n" +
          "중요도가 3 미만이면 'IGNORE'라고 출력해.";
@@ -172,7 +248,7 @@ public class AIManager : MonoBehaviour
 
             yield return www.SendWebRequest();
 
-                    //AI가 스스로 대화 내용을 보고 "이건 중요한 기억이야" 라고 판단 → 그걸 메모리DB에 저장하는 구조
+            //AI가 스스로 대화 내용을 보고 "이건 중요한 기억이야" 라고 판단 → 그걸 메모리DB에 저장하는 구조
             if (www.result == UnityWebRequest.Result.Success)
             {
                 string responseJson = www.downloadHandler.text;
@@ -188,7 +264,9 @@ public class AIManager : MonoBehaviour
                     int level = int.Parse(lines[0].Replace("LEVEL:", "").Trim());
                     string fact = lines[1].Replace("SAVE:", "").Trim();
 
-                    FindFirstObjectByType<MemoryManager>().AddMemory(currentNpcId, fact, level);
+                    string targetNpc = string.IsNullOrEmpty(speakerNpcId) ? currentNpcId : speakerNpcId;
+
+                    FindFirstObjectByType<MemoryManager>().AddMemory(targetNpc, fact, level);
                     Debug.Log($"메모리에 저장됨 (중요도 {level}): {fact}");
                 }
             }
